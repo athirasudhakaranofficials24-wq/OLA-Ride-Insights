@@ -1,8 +1,6 @@
-create database employee;
+create database ola_project ;
 show databases;
-drop database employee;
-SHOW TABLES IN ola_project;
-DROP TABLE ola_project.ola_cleaned_data;
+
 USE ola_project;
 
 CREATE TABLE ola_cleaned_data (
