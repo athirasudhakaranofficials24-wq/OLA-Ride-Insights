@@ -1,7 +1,6 @@
 
 import streamlit as st
 import pandas as pd
-import mysql.connector
 from pathlib import Path
 import plotly.express as px
 
@@ -19,515 +18,508 @@ st.title("🚕 OLA RIDE INSIGHTS")
 st.subheader("Ride Booking Analytics Dashboard")
 
 # ---------------------------------
-# DATABASE CONNECTION
+# LOAD DATA FROM CSV
 # ---------------------------------
 
-st.sidebar.header("Database Connection")
+st.sidebar.header("Data Source")
 
-host = st.sidebar.text_input("Host", "localhost")
-user = st.sidebar.text_input("Username", "root")
-password = st.sidebar.text_input(
-    "Password",
-    type="password"
+folder = Path(__file__).parent
+file_path = folder / "OLA_Cleaned_Data.csv"
+
+@st.cache_data
+def load_data(path):
+    return pd.read_csv(path)
+
+try:
+    df = load_data(str(file_path))
+
+    st.sidebar.success("CSV Data Loaded Successfully!")
+
+except Exception as e:
+    st.error(f"CSV Loading Error: {e}")
+    st.stop()
+
+# ---------------------------------
+# DATA PREPROCESSING
+# ---------------------------------
+
+required_columns = [
+    "Date", "Booking_ID", "Booking_Status",
+    "Vehicle_Type", "Payment_Method",
+    "Booking_Value", "Ride_Distance",
+    "Customer_ID", "Driver_Ratings",
+    "Customer_Rating"
+]
+
+missing_columns = [
+    col for col in required_columns
+    if col not in df.columns
+]
+
+if missing_columns:
+    st.error(f"Missing columns in CSV: {missing_columns}")
+    st.stop()
+
+df["Date"] = pd.to_datetime(
+    df["Date"],
+    errors="coerce"
 )
-database = st.sidebar.text_input(
-    "Database",
-    "ola_project"
+
+df["Booking_Value"] = pd.to_numeric(
+    df["Booking_Value"],
+    errors="coerce"
 )
 
-if st.sidebar.button("Connect to Database"):
+df["Ride_Distance"] = pd.to_numeric(
+    df["Ride_Distance"],
+    errors="coerce"
+)
 
-    try:
-        conn = mysql.connector.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=database
-        )
+df["Driver_Ratings"] = pd.to_numeric(
+    df["Driver_Ratings"],
+    errors="coerce"
+)
 
-        query = "SELECT * FROM ola_cleaned_data"
-
-        df = pd.read_sql(query, conn)
-
-        conn.close()
-
-        st.session_state["ola_data"] = df
-
-        st.success("Database Connected Successfully!")
-
-    except Exception as e:
-        st.error(f"Connection Error: {e}")
-
+df["Customer_Rating"] = pd.to_numeric(
+    df["Customer_Rating"],
+    errors="coerce"
+)
 
 # ---------------------------------
-# DISPLAY DATA
+# KPI CARDS
 # ---------------------------------
 
-if "ola_data" in st.session_state:
+st.divider()
 
-    df = st.session_state["ola_data"].copy()
+st.header("Ride Booking Overview")
 
-    # Date format
-    df["Date"] = pd.to_datetime(
-        df["Date"],
-        errors="coerce"
-    )
+col1, col2, col3, col4 = st.columns(4)
 
-    st.divider()
+col1.metric(
+    "Total Bookings",
+    f"{df['Booking_ID'].nunique():,}"
+)
 
-    # ---------------------------------
-    # KPI CARDS
-    # ---------------------------------
+col2.metric(
+    "Total Revenue",
+    f"₹{df['Booking_Value'].sum():,.2f}"
+)
 
-    st.header("Ride Booking Overview")
+col3.metric(
+    "Total Ride Distance",
+    f"{df['Ride_Distance'].sum():,.2f} KM"
+)
 
-    col1, col2, col3, col4 = st.columns(4)
+col4.metric(
+    "Average Booking Value",
+    f"₹{df['Booking_Value'].mean():,.2f}"
+)
 
-    col1.metric(
-        "Total Bookings",
-        f"{df['Booking_ID'].nunique():,}"
-    )
+st.divider()
 
-    col2.metric(
-        "Total Revenue",
-        f"₹{df['Booking_Value'].sum():,.2f}"
-    )
+# ---------------------------------
+# INTERACTIVE FILTERS
+# ---------------------------------
 
-    col3.metric(
-        "Total Ride Distance",
-        f"{df['Ride_Distance'].sum():,.2f} KM"
-    )
+st.header("Interactive Filters")
 
-    col4.metric(
-        "Average Booking Value",
-        f"₹{df['Booking_Value'].mean():,.2f}"
-    )
+c1, c2, c3 = st.columns(3)
 
-    st.divider()
-
-    # ---------------------------------
-    # INTERACTIVE FILTERS
-    # ---------------------------------
-
-    st.header("Interactive Filters")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        vehicle = st.selectbox(
-            "Vehicle Type",
-            ["All"] + sorted(
-                df["Vehicle_Type"].dropna().unique().tolist()
-            )
+with c1:
+    vehicle = st.selectbox(
+        "Vehicle Type",
+        ["All"] + sorted(
+            df["Vehicle_Type"].dropna().unique().tolist()
         )
+    )
 
-    with c2:
-        status = st.selectbox(
-            "Booking Status",
-            ["All"] + sorted(
-                df["Booking_Status"].dropna().unique().tolist()
-            )
+with c2:
+    status = st.selectbox(
+        "Booking Status",
+        ["All"] + sorted(
+            df["Booking_Status"].dropna().unique().tolist()
         )
+    )
 
-    with c3:
-        payment = st.selectbox(
-            "Payment Method",
-            ["All"] + sorted(
-                df["Payment_Method"].dropna().unique().tolist()
-            )
+with c3:
+    payment = st.selectbox(
+        "Payment Method",
+        ["All"] + sorted(
+            df["Payment_Method"].dropna().unique().tolist()
         )
+    )
 
-    filtered_df = df.copy()
+filtered_df = df.copy()
 
-    if vehicle != "All":
-        filtered_df = filtered_df[
-            filtered_df["Vehicle_Type"] == vehicle
-        ]
+if vehicle != "All":
+    filtered_df = filtered_df[
+        filtered_df["Vehicle_Type"] == vehicle
+    ]
 
-    if status != "All":
-        filtered_df = filtered_df[
-            filtered_df["Booking_Status"] == status
-        ]
+if status != "All":
+    filtered_df = filtered_df[
+        filtered_df["Booking_Status"] == status
+    ]
 
-    if payment != "All":
-        filtered_df = filtered_df[
-            filtered_df["Payment_Method"] == payment
-        ]
+if payment != "All":
+    filtered_df = filtered_df[
+        filtered_df["Payment_Method"] == payment
+    ]
 
-    # ---------------------------------
-    # SEARCH BOOKING
-    # ---------------------------------
+# ---------------------------------
+# SEARCH BOOKING
+# ---------------------------------
 
-    st.divider()
+st.divider()
 
-    st.header("Search Booking")
+st.header("Search Booking")
 
-    search_id = st.text_input("Enter Booking ID")
+search_id = st.text_input("Enter Booking ID")
 
-    if search_id:
-        filtered_df = filtered_df[
-            filtered_df["Booking_ID"].astype(str).str.contains(
-                search_id,
-                case=False,
-                na=False
-            )
-        ]
+if search_id:
+    filtered_df = filtered_df[
+        filtered_df["Booking_ID"].astype(str).str.contains(
+            search_id,
+            case=False,
+            na=False
+        )
+    ]
 
-    st.subheader("SQL Query Results")
+st.subheader("Booking Data Results")
 
-    st.dataframe(
-        filtered_df,
+st.dataframe(
+    filtered_df,
+    use_container_width=True
+)
+
+st.write("Total Records:", len(filtered_df))
+
+# ---------------------------------
+# ANALYTICS TABS
+# ---------------------------------
+
+st.divider()
+
+st.title("OLA RIDE INSIGHTS - ANALYTICS")
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "Overall",
+    "Vehicle Type",
+    "Revenue",
+    "Cancellation",
+    "Ratings"
+])
+
+# ---------------------------------
+# TAB 1 - OVERALL
+# ---------------------------------
+
+with tab1:
+
+    st.header("Overall Analysis")
+
+    ride_volume = (
+        filtered_df.dropna(subset=["Date"])
+        .groupby("Date")["Booking_ID"]
+        .nunique()
+        .reset_index(name="Total Bookings")
+        .sort_values("Date")
+    )
+
+    fig1 = px.line(
+        ride_volume,
+        x="Date",
+        y="Total Bookings",
+        title="Ride Volume Over Time",
+        markers=True
+    )
+
+    st.plotly_chart(
+        fig1,
         use_container_width=True
     )
 
-    st.write("Total Records:", len(filtered_df))
+    status_data = (
+        filtered_df["Booking_Status"]
+        .value_counts()
+        .reset_index()
+    )
 
-    # ---------------------------------
-    # ANALYTICS TABS
-    # ---------------------------------
+    status_data.columns = [
+        "Booking Status",
+        "Bookings"
+    ]
 
-    st.divider()
+    fig2 = px.pie(
+        status_data,
+        names="Booking Status",
+        values="Bookings",
+        hole=0.5,
+        title="Booking Status Breakdown"
+    )
 
-    st.title("OLA RIDE INSIGHTS - ANALYTICS")
+    st.plotly_chart(
+        fig2,
+        use_container_width=True
+    )
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Overall",
-        "Vehicle Type",
-        "Revenue",
-        "Cancellation",
-        "Ratings"
-    ])
+# ---------------------------------
+# TAB 2 - VEHICLE TYPE
+# ---------------------------------
 
-    # ---------------------------------
-    # TAB 1 - OVERALL
-    # ---------------------------------
+with tab2:
 
-    with tab1:
+    st.header("Vehicle Type Analysis")
 
-        st.header("Overall Analysis")
-
-        # Ride Volume Over Time
-
-        ride_volume = (
-            filtered_df.groupby("Date")["Booking_ID"]
-            .nunique()
-            .reset_index(name="Total Bookings")
-            .sort_values("Date")
+    vehicle_data = (
+        filtered_df.groupby("Vehicle_Type")["Ride_Distance"]
+        .sum()
+        .reset_index()
+        .sort_values(
+            "Ride_Distance",
+            ascending=False
         )
+        .head(5)
+    )
 
-        fig1 = px.line(
-            ride_volume,
-            x="Date",
-            y="Total Bookings",
-            title="Ride Volume Over Time",
-            markers=True
+    fig3 = px.bar(
+        vehicle_data,
+        x="Ride_Distance",
+        y="Vehicle_Type",
+        orientation="h",
+        title="Top 5 Vehicle Types by Ride Distance"
+    )
+
+    st.plotly_chart(
+        fig3,
+        use_container_width=True
+    )
+
+# ---------------------------------
+# TAB 3 - REVENUE
+# ---------------------------------
+
+with tab3:
+
+    st.header("Revenue Analysis")
+
+    revenue_data = (
+        filtered_df.groupby("Payment_Method")["Booking_Value"]
+        .sum()
+        .reset_index()
+    )
+
+    fig4 = px.bar(
+        revenue_data,
+        x="Payment_Method",
+        y="Booking_Value",
+        title="Revenue by Payment Method"
+    )
+
+    st.plotly_chart(
+        fig4,
+        use_container_width=True
+    )
+
+    customer_data = (
+        filtered_df.groupby("Customer_ID")["Booking_Value"]
+        .sum()
+        .reset_index()
+        .sort_values(
+            "Booking_Value",
+            ascending=False
         )
+        .head(5)
+    )
 
-        st.plotly_chart(
-            fig1,
-            use_container_width=True
-        )
+    fig5 = px.bar(
+        customer_data,
+        x="Customer_ID",
+        y="Booking_Value",
+        title="Top 5 Customers by Total Booking Value"
+    )
 
-        # Booking Status Breakdown
+    st.plotly_chart(
+        fig5,
+        use_container_width=True
+    )
 
-        status_data = (
-            filtered_df["Booking_Status"]
+    daily_distance = (
+        filtered_df.dropna(subset=["Date"])
+        .groupby("Date")["Ride_Distance"]
+        .sum()
+        .reset_index()
+        .sort_values("Date")
+    )
+
+    fig6 = px.line(
+        daily_distance,
+        x="Date",
+        y="Ride_Distance",
+        markers=True,
+        title="Ride Distance Distribution Per Day"
+    )
+
+    st.plotly_chart(
+        fig6,
+        use_container_width=True
+    )
+
+# ---------------------------------
+# TAB 4 - CANCELLATION
+# ---------------------------------
+
+with tab4:
+
+    st.header("Cancellation Analysis")
+
+    st.info(
+        "The following charts show customer and driver "
+        "cancellation field values. Verify the source "
+        "dataset values before interpreting them as reasons."
+    )
+
+    if "Canceled_Rides_by_Customer" in filtered_df.columns:
+
+        customer_cancel = (
+            filtered_df["Canceled_Rides_by_Customer"]
             .value_counts()
             .reset_index()
         )
 
-        status_data.columns = [
-            "Booking Status",
-            "Bookings"
-        ]
-
-        fig2 = px.pie(
-            status_data,
-            names="Booking Status",
-            values="Bookings",
-            hole=0.5,
-            title="Booking Status Breakdown"
-        )
-
-        st.plotly_chart(
-            fig2,
-            use_container_width=True
-        )
-
-    # ---------------------------------
-    # TAB 2 - VEHICLE TYPE
-    # ---------------------------------
-
-    with tab2:
-
-        st.header("Vehicle Type Analysis")
-
-        vehicle_data = (
-            filtered_df.groupby("Vehicle_Type")["Ride_Distance"]
-            .sum()
-            .reset_index()
-            .sort_values(
-                "Ride_Distance",
-                ascending=False
-            )
-            .head(5)
-        )
-
-        fig3 = px.bar(
-            vehicle_data,
-            x="Ride_Distance",
-            y="Vehicle_Type",
-            orientation="h",
-            title="Top 5 Vehicle Types by Ride Distance"
-        )
-
-        st.plotly_chart(
-            fig3,
-            use_container_width=True
-        )
-
-    # ---------------------------------
-    # TAB 3 - REVENUE
-    # ---------------------------------
-
-    with tab3:
-
-        st.header("Revenue Analysis")
-
-        # Revenue by Payment Method
-
-        revenue_data = (
-            filtered_df.groupby("Payment_Method")["Booking_Value"]
-            .sum()
-            .reset_index()
-        )
-
-        fig4 = px.bar(
-            revenue_data,
-            x="Payment_Method",
-            y="Booking_Value",
-            title="Revenue by Payment Method"
-        )
-
-        st.plotly_chart(
-            fig4,
-            use_container_width=True
-        )
-
-        # Top 5 Customers
-
-        customer_data = (
-            filtered_df.groupby("Customer_ID")["Booking_Value"]
-            .sum()
-            .reset_index()
-            .sort_values(
-                "Booking_Value",
-                ascending=False
-            )
-            .head(5)
-        )
-
-        fig5 = px.bar(
-            customer_data,
-            x="Customer_ID",
-            y="Booking_Value",
-            title="Top 5 Customers by Total Booking Value"
-        )
-
-        st.plotly_chart(
-            fig5,
-            use_container_width=True
-        )
-
-        # Ride Distance Distribution Per Day
-
-        daily_distance = (
-            filtered_df.groupby("Date")["Ride_Distance"]
-            .sum()
-            .reset_index()
-            .sort_values("Date")
-        )
-
-        fig6 = px.line(
-            daily_distance,
-            x="Date",
-            y="Ride_Distance",
-            markers=True,
-            title="Ride Distance Distribution Per Day"
-        )
-
-        st.plotly_chart(
-            fig6,
-            use_container_width=True
-        )
-
-    # ---------------------------------
-    # TAB 4 - CANCELLATION
-    # ---------------------------------
-
-    with tab4:
-
-        st.header("Cancellation Analysis")
-
-        st.info(
-            "Cancellation reason charts require the actual "
-            "reason values in the dataset. The following "
-            "charts show customer and driver cancellation counts."
-        )
-
-        # Customer Cancellations
-
-        if "Canceled_Rides_by_Customer" in filtered_df.columns:
-
-            customer_cancel = (
-                filtered_df["Canceled_Rides_by_Customer"]
-                .value_counts()
-                .reset_index()
-            )
-
-            customer_cancel.columns = [
-                "Cancellation Value",
-                "Count"
-            ]
-
-            fig7 = px.pie(
-                customer_cancel,
-                names="Cancellation Value",
-                values="Count",
-                title="Customer Cancellations"
-            )
-
-            st.plotly_chart(
-                fig7,
-                use_container_width=True
-            )
-
-        # Driver Cancellations
-
-        if "Canceled_Rides_by_Driver" in filtered_df.columns:
-
-            driver_cancel = (
-                filtered_df["Canceled_Rides_by_Driver"]
-                .value_counts()
-                .reset_index()
-            )
-
-            driver_cancel.columns = [
-                "Cancellation Value",
-                "Count"
-            ]
-
-            fig8 = px.pie(
-                driver_cancel,
-                names="Cancellation Value",
-                values="Count",
-                title="Driver Cancellations"
-            )
-
-            st.plotly_chart(
-                fig8,
-                use_container_width=True
-            )
-
-    # ---------------------------------
-    # TAB 5 - RATINGS
-    # ---------------------------------
-
-    with tab5:
-
-        st.header("Ratings Analysis")
-
-        # Driver Ratings
-
-        driver_rating = (
-            filtered_df["Driver_Ratings"]
-            .dropna()
-            .value_counts()
-            .sort_index()
-            .reset_index()
-        )
-
-        driver_rating.columns = [
-            "Driver Rating",
+        customer_cancel.columns = [
+            "Cancellation Value",
             "Count"
         ]
 
-        fig9 = px.bar(
-            driver_rating,
-            x="Driver Rating",
-            y="Count",
-            title="Driver Ratings Distribution"
+        fig7 = px.pie(
+            customer_cancel,
+            names="Cancellation Value",
+            values="Count",
+            title="Customer Cancellations"
         )
 
         st.plotly_chart(
-            fig9,
+            fig7,
             use_container_width=True
         )
 
-        # Customer Ratings
+    if "Canceled_Rides_by_Driver" in filtered_df.columns:
 
-        customer_rating = (
-            filtered_df["Customer_Rating"]
-            .dropna()
+        driver_cancel = (
+            filtered_df["Canceled_Rides_by_Driver"]
             .value_counts()
-            .sort_index()
             .reset_index()
         )
 
-        customer_rating.columns = [
-            "Customer Rating",
+        driver_cancel.columns = [
+            "Cancellation Value",
             "Count"
         ]
 
-        fig10 = px.bar(
-            customer_rating,
-            x="Customer Rating",
-            y="Count",
-            title="Customer Ratings Distribution"
+        fig8 = px.pie(
+            driver_cancel,
+            names="Cancellation Value",
+            values="Count",
+            title="Driver Cancellations"
         )
 
         st.plotly_chart(
-            fig10,
+            fig8,
             use_container_width=True
         )
 
-    # ---------------------------------
-    # POWER BI DASHBOARD IMAGES
-    # ---------------------------------
+# ---------------------------------
+# TAB 5 - RATINGS
+# ---------------------------------
 
-    st.divider()
+with tab5:
 
-    st.header("Power BI Dashboard")
+    st.header("Ratings Analysis")
 
-    folder = Path(__file__).parent
+    driver_rating = (
+        filtered_df["Driver_Ratings"]
+        .dropna()
+        .value_counts()
+        .sort_index()
+        .reset_index()
+    )
 
-    image1 = folder / "ola_ride_analysis dashboard-1.png"
-    image2 = folder / "ola_ride_analysis dashboard-2.png"
+    driver_rating.columns = [
+        "Driver Rating",
+        "Count"
+    ]
 
-    if image1.exists():
+    fig9 = px.bar(
+        driver_rating,
+        x="Driver Rating",
+        y="Count",
+        title="Driver Ratings Distribution"
+    )
 
-        st.subheader("OLA Ride Overview")
+    st.plotly_chart(
+        fig9,
+        use_container_width=True
+    )
 
-        st.image(
-            str(image1),
-            use_container_width=True
-        )
+    customer_rating = (
+        filtered_df["Customer_Rating"]
+        .dropna()
+        .value_counts()
+        .sort_index()
+        .reset_index()
+    )
 
-    else:
-        st.warning("Overview dashboard image not found.")
+    customer_rating.columns = [
+        "Customer Rating",
+        "Count"
+    ]
 
-    if image2.exists():
+    fig10 = px.bar(
+        customer_rating,
+        x="Customer Rating",
+        y="Count",
+        title="Customer Ratings Distribution"
+    )
 
-        st.subheader("OLA Ride Analysis")
+    st.plotly_chart(
+        fig10,
+        use_container_width=True
+    )
 
-        st.image(
-            str(image2),
-            use_container_width=True
-        )
+# ---------------------------------
+# POWER BI DASHBOARD IMAGES
+# ---------------------------------
 
-    else:
-        st.warning("Analysis dashboard image not found.")
+st.divider()
+
+st.header("Power BI Dashboard")
+
+image1 = folder / "ola_ride_analysis dashboard-1.png"
+image2 = folder / "ola_ride_analysis dashboard-2.png"
+
+if image1.exists():
+
+    st.subheader("OLA Ride Overview")
+
+    st.image(
+        str(image1),
+        use_container_width=True
+    )
 
 else:
+    st.warning("Overview dashboard image not found.")
 
-    st.info("Please connect to MySQL using the sidebar.")
+if image2.exists():
+
+    st.subheader("OLA Ride Analysis")
+
+    st.image(
+        str(image2),
+        use_container_width=True
+    )
+
+else:
+    st.warning("Analysis dashboard image not found.")
+
+st.success("OLA Ride Insights Analysis Completed!")
